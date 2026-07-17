@@ -583,22 +583,22 @@ class LivenessController extends ChangeNotifier {
         final flashResult = _screenFlashService!.processFrame(face, image);
         if (flashResult != null) {
           _cameraService.unlockExposure();
-          if (!flashResult.passed && _config.screenFlash?.failSessionOnSpoofing == true) {
-            _screenFlashSpoofDetected = true;
-            _statusMessage = _config.messages.screenFlashSpoofingDetected;
-            _completeSession();
-          } else {
-            _screenFlashSpoofDetected = !flashResult.passed;
-            _session.state = LivenessState.performingChallenges;
-            _updateStatusMessage();
-            _speak(_statusMessage);
-            Future.delayed(Duration.zero, () {
-              if (_session.currentChallenge?.type == ChallengeType.zoom &&
-                  _zoomChallengeController.state == ZoomChallengeState.initial) {
-                _zoomChallengeController.startChallenge();
-              }
-            });
-          }
+          // NOTE: previously this short-circuited straight to _completeSession()
+          // here when the flash test failed, which (a) skipped the challenge
+          // phase entirely and (b) revealed the spoof-detected outcome to the
+          // user/attacker in real time instead of at the very end. We now
+          // always continue into performingChallenges and let _completeSession()
+          // make the final pass/fail call using _screenFlashSpoofDetected.
+          _screenFlashSpoofDetected = !flashResult.passed;
+          _session.state = LivenessState.performingChallenges;
+          _updateStatusMessage();
+          _speak(_statusMessage);
+          Future.delayed(Duration.zero, () {
+            if (_session.currentChallenge?.type == ChallengeType.zoom &&
+                _zoomChallengeController.state == ZoomChallengeState.initial) {
+              _zoomChallengeController.startChallenge();
+            }
+          });
         }
         break;
 
@@ -695,6 +695,14 @@ class LivenessController extends ChangeNotifier {
     _isVerificationSuccessful = true;
     if (_config.failOnMotionCorrelationFailedAtTheEnd &&
         motionCorrelationFailed) {
+      _isVerificationSuccessful = false;
+    }
+    // BUGFIX: this used to be ignored entirely — a failed screen-flash
+    // reflection test (real anti-spoofing signal) never affected the
+    // reported verification result, which is what let photo/video replays
+    // through as "successful".
+    if (_screenFlashSpoofDetected &&
+        _config.screenFlash?.failSessionOnSpoofing == true) {
       _isVerificationSuccessful = false;
     }
 
