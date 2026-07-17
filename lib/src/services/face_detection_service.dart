@@ -23,17 +23,22 @@ class FaceDetectionService {
   /// Error recovery counter
   int _errorCount = 0;
 
-  /// Last measured eye open probability
-  double? _lastEyeOpenProbability;
-
-  /// Last measured smile probability
-  double? _lastSmileProbability;
-
   /// Whether face is properly centered
   bool _isFaceCentered = false;
 
-  /// Last measured head angle X (for nodding)
-  double? _lastHeadEulerAngleX;
+  // Latches for edge-triggered challenges (blink/smile/nod). These challenges
+  // require observing a "before" state and then a "after" state, but frames
+  // are frequently skipped between them (ML Kit inference cost, and
+  // isFaceWellPositioned rejecting frames during the gesture) — comparing
+  // only against the immediately-previous PROCESSED frame means a valid
+  // gesture is very likely to be missed because the two frames it needs never
+  // land back-to-back. Latching the "before" state and holding it until the
+  // "after" state is observed (however many frames later) fixes that without
+  // weakening the check to a single-frame static read.
+  bool _hasSeenEyesOpen = false;
+  bool _hasSeenNeutralFace = false;
+  bool _hasSeenNodUp = false;
+  bool _hasSeenNodDown = false;
 
   /// History of head angle readings (dx: angleX, dy: angleY)
   final List<Offset> _headAngleReadings = [];
@@ -925,59 +930,66 @@ class FaceDetectionService {
     return false;
   }
 
-  /// Detect eye blink
+  /// Detect eye blink. Latched: "eyes open" observed on any earlier
+  /// processed frame stays armed until a later frame shows "eyes closed" —
+  /// the two don't need to be back-to-back processed frames.
   bool _detectBlink(Face face) {
     if (face.leftEyeOpenProbability != null &&
         face.rightEyeOpenProbability != null) {
       final double avgEyeOpenProbability =
           (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2;
 
-      if (_lastEyeOpenProbability != null) {
-        if (_lastEyeOpenProbability! > _config.eyeBlinkThresholdOpen &&
-            avgEyeOpenProbability < _config.eyeBlinkThresholdClosed) {
-          _lastEyeOpenProbability = avgEyeOpenProbability;
-          return true;
-        }
+      if (avgEyeOpenProbability > _config.eyeBlinkThresholdOpen) {
+        _hasSeenEyesOpen = true;
+      } else if (_hasSeenEyesOpen &&
+          avgEyeOpenProbability < _config.eyeBlinkThresholdClosed) {
+        _hasSeenEyesOpen = false;
+        return true;
       }
-
-      _lastEyeOpenProbability = avgEyeOpenProbability;
     }
     return false;
   }
 
-  /// Detect smile
+  /// Detect smile. Latched the same way as [_detectBlink].
   bool _detectSmile(Face face) {
     if (face.smilingProbability != null) {
       final smileProbability = face.smilingProbability!;
 
-      if (_lastSmileProbability != null) {
-        if (_lastSmileProbability! < _config.smileThresholdNeutral &&
-            smileProbability > _config.smileThresholdSmiling) {
-          _lastSmileProbability = smileProbability;
-          return true;
-        }
+      if (smileProbability < _config.smileThresholdNeutral) {
+        _hasSeenNeutralFace = true;
+      } else if (_hasSeenNeutralFace &&
+          smileProbability > _config.smileThresholdSmiling) {
+        _hasSeenNeutralFace = false;
+        return true;
       }
-
-      _lastSmileProbability = smileProbability;
     }
     return false;
   }
 
-  /// Detect head nod
+  /// Detect head nod. Latched the same way as [_detectBlink]: an "up" swing
+  /// observed on any earlier frame stays armed until a later frame shows the
+  /// "down" swing (or vice versa).
   bool _detectNod(Face face) {
     if (face.headEulerAngleX != null) {
       final headAngleX = face.headEulerAngleX!;
       debugPrint('Nod angle: $headAngleX');
 
-      if (_lastHeadEulerAngleX != null) {
-        if ((_lastHeadEulerAngleX! < -10 && headAngleX > 10) ||
-            (_lastHeadEulerAngleX! > 10 && headAngleX < -10)) {
-          _lastHeadEulerAngleX = headAngleX;
-          return true;
-        }
+      if (headAngleX > 10) {
+        _hasSeenNodUp = true;
+      } else if (headAngleX < -10) {
+        _hasSeenNodDown = true;
       }
 
-      _lastHeadEulerAngleX = headAngleX;
+      if (headAngleX < -10 && _hasSeenNodUp) {
+        _hasSeenNodUp = false;
+        _hasSeenNodDown = false;
+        return true;
+      }
+      if (headAngleX > 10 && _hasSeenNodDown) {
+        _hasSeenNodUp = false;
+        _hasSeenNodDown = false;
+        return true;
+      }
     }
     return false;
   }
@@ -998,14 +1010,15 @@ class FaceDetectionService {
 
   /// Reset all tracking data
   void resetTracking() {
-    _lastEyeOpenProbability = null;
-    _lastSmileProbability = null;
-    _lastHeadEulerAngleX = null;
     _headAngleReadings.clear();
     _isFaceCentered = false;
     _errorCount = 0;
     _frameSkipCounter = 0;
     _isTiltDownChallengeReady = false;
+    _hasSeenEyesOpen = false;
+    _hasSeenNeutralFace = false;
+    _hasSeenNodUp = false;
+    _hasSeenNodDown = false;
 
     _faceLocked = false;
     _lockedTrackingId = null;
