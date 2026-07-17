@@ -112,6 +112,16 @@ class LivenessConfig {
   /// If null, random challenges will be generated
   final List<ChallengeType>? challengeTypes;
 
+  /// When set (and [challengeTypes] is provided), a fresh random subset of
+  /// this size is drawn from [challengeTypes] every time challenges are
+  /// (re)generated — including on session reset/timeout, not just once at
+  /// session start. Without this, [challengeTypes] is used as a fixed,
+  /// literal list: the same items in the same order every time, even across
+  /// resets, which lets a spoofing attempt that already saw one round learn
+  /// the exact sequence to replay. Null preserves the old fixed-list
+  /// behaviour for backward compatibility.
+  final int? challengeSelectionCount;
+
   /// Number of challenges to present to the user
   /// Only used if challengeTypes is null
   final int numberOfRandomChallenges;
@@ -262,6 +272,7 @@ class LivenessConfig {
     this.guideMarkerRatio = LivenessConstants.defaultGuideMarkerRatio,
     this.guideMarkerInnerRatio = LivenessConstants.defaultGuideMarkerInnerRatio,
     this.challengeTypes,
+    this.challengeSelectionCount,
     this.numberOfRandomChallenges = 3,
     this.alwaysIncludeBlink = true,
     this.challengeInstructions,
@@ -327,6 +338,7 @@ class LivenessConfig {
     double? guideMarkerRatio,
     double? guideMarkerInnerRatio,
     List<ChallengeType>? challengeTypes,
+    int? challengeSelectionCount,
     int? numberOfRandomChallenges,
     bool? alwaysIncludeBlink,
     Map<ChallengeType, String>? challengeInstructions,
@@ -390,6 +402,7 @@ class LivenessConfig {
       guideMarkerRatio: guideMarkerRatio ?? this.guideMarkerRatio,
       guideMarkerInnerRatio: guideMarkerInnerRatio ?? this.guideMarkerInnerRatio,
       challengeTypes: challengeTypes ?? this.challengeTypes,
+      challengeSelectionCount: challengeSelectionCount ?? this.challengeSelectionCount,
       numberOfRandomChallenges: numberOfRandomChallenges ?? this.numberOfRandomChallenges,
       alwaysIncludeBlink: alwaysIncludeBlink ?? this.alwaysIncludeBlink,
       challengeInstructions: challengeInstructions ?? this.challengeInstructions,

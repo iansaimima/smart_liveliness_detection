@@ -74,7 +74,17 @@ class LivenessSession {
   static List<Challenge> generateRandomChallenges(LivenessConfig config) {
     // If specific challenge types are provided, use those
     if (config.challengeTypes != null && config.challengeTypes!.isNotEmpty) {
-      return config.challengeTypes!.map((type) {
+      // challengeSelectionCount set: treat challengeTypes as a pool and draw
+      // a fresh random subset every call (including on session reset), so a
+      // timeout/retry doesn't hand a spoofing attempt the exact same
+      // challenge sequence to replay. Without it, challengeTypes is used
+      // as-is (old behaviour).
+      final selectionCount = config.challengeSelectionCount;
+      final pool = (selectionCount != null && selectionCount < config.challengeTypes!.length)
+          ? (List<ChallengeType>.from(config.challengeTypes!)..shuffle(math.Random()))
+              .take(selectionCount)
+          : config.challengeTypes!;
+      return pool.map((type) {
         String? customInstruction = config.challengeInstructions?[type];
         return Challenge(type, customInstruction: customInstruction);
       }).toList();
