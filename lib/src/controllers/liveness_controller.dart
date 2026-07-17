@@ -97,6 +97,11 @@ class LivenessController extends ChangeNotifier {
   /// Whether the screen-flash test detected a spoofing attempt
   bool _screenFlashSpoofDetected = false;
 
+  /// Raw result (per-color luminance deltas, baseline, confidence) from the
+  /// screen-flash test — kept so it can be surfaced to the host app for
+  /// diagnostics/threshold-tuning instead of just the pass/fail boolean.
+  ScreenFlashResult? _lastScreenFlashResult;
+
   /// Last computed face quality result
   FaceQualityResult? _lastQualityResult;
 
@@ -590,6 +595,7 @@ class LivenessController extends ChangeNotifier {
           // always continue into performingChallenges and let _completeSession()
           // make the final pass/fail call using _screenFlashSpoofDetected.
           _screenFlashSpoofDetected = !flashResult.passed;
+          _lastScreenFlashResult = flashResult;
           _session.state = LivenessState.performingChallenges;
           _updateStatusMessage();
           _speak(_statusMessage);
@@ -737,6 +743,17 @@ class LivenessController extends ChangeNotifier {
 
     final metadata = <String, dynamic>{
       'antiSpoofingDetection': antiSpoofingResults,
+      // Raw numbers behind screenFlashSpoofDetected, for threshold tuning —
+      // deliberately kept out of antiSpoofingResults (bool-only) so existing
+      // "any flag true" checks on that map aren't affected.
+      if (_lastScreenFlashResult != null)
+        'screenFlashDiagnostics': {
+          'passed': _lastScreenFlashResult!.passed,
+          'colorDeltas': _lastScreenFlashResult!.colorDeltas,
+          'baselineLuminance': _lastScreenFlashResult!.baselineLuminance,
+          'confidence': _lastScreenFlashResult!.confidence,
+          'reflectionThreshold': _config.screenFlash?.reflectionThreshold,
+        },
     };
 
     // Capture final image if enabled
@@ -837,6 +854,7 @@ class LivenessController extends ChangeNotifier {
     _lastQualityResult = null;
     _qualityFrameCounter = 0;
     _screenFlashSpoofDetected = false;
+    _lastScreenFlashResult = null;
     _screenFlashService?.reset();
     _cameraService.unlockExposure();
     _depthResults.clear();
