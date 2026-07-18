@@ -772,15 +772,19 @@ class LivenessController extends ChangeNotifier {
         'screenFlashDiagnostics': {
           'passed': _lastScreenFlashResult!.passed,
           'colorDeltas': _lastScreenFlashResult!.colorDeltas,
-          'baselineLuminance': _lastScreenFlashResult!.baselineLuminance,
+          // Per-color local baseline (sampled right before that color's own
+          // flash, not one baseline shared by all 3 colors from the start of
+          // the test — see ScreenFlashService._SubPhase doc) instead of a
+          // single baselineLuminance number.
+          'localBaselines': _lastScreenFlashResult!.localBaselines,
           'confidence': _lastScreenFlashResult!.confidence,
           'reflectionThreshold': _config.screenFlash?.reflectionThreshold,
           // Diagnostics added to debug erratic/negative deltas on genuine
           // faces: whether AEC lock actually held, and the raw per-frame
-          // luminance samples behind the averaged colorDeltas/baseline above.
+          // luminance samples behind the averaged colorDeltas/localBaselines above.
           'exposureLockSucceeded': _lastScreenFlashResult!.exposureLockSucceeded,
-          'rawBaselineReadings': _lastScreenFlashResult!.rawBaselineReadings,
-          'rawFlashReadings': _lastScreenFlashResult!.rawFlashReadings,
+          'rawLocalBaselineReadings': _lastScreenFlashResult!.rawLocalBaselineReadings,
+          'rawColorReadings': _lastScreenFlashResult!.rawColorReadings,
         },
       // Per-challenge outcome (completed or not) with the raw detector
       // signal last observed for it — lets the host app tell "challenge

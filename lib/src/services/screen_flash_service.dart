@@ -5,7 +5,25 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../config/screen_flash_config.dart';
 import '../models/screen_flash_result.dart';
 
-enum ScreenFlashPhase { idle, baseline, flashRed, flashGreen, flashBlue, done }
+enum ScreenFlashPhase { idle, running, done }
+
+/// Sub-step within a single color's cycle. Each color gets its OWN local
+/// baseline sampled immediately before its flash, instead of every color
+/// being compared against one baseline taken once at the very start of the
+/// test — outdoor testing showed ambient light can drift by several
+/// luminance units over the ~2-3s the full red→green→blue sequence used to
+/// take, which a single up-front baseline can't tell apart from an actual
+/// flash reflection (the color sampled last ends up systematically
+/// disadvantaged vs the one sampled first).
+enum _SubPhase { neutralWarmup, neutralSample, colorWarmup, colorSample }
+
+const List<String> _kColors = ['red', 'green', 'blue'];
+
+const Map<String, Color> _kOverlayColors = {
+  'red': Color(0xFFFF0000),
+  'green': Color(0xFF00FF00),
+  'blue': Color(0xFF0000FF),
+};
 
 /// Manages the screen-flash anti-spoofing test state machine.
 ///
@@ -19,15 +37,15 @@ class ScreenFlashService {
   final ScreenFlashConfig config;
 
   ScreenFlashPhase _phase = ScreenFlashPhase.idle;
+  _SubPhase _subPhase = _SubPhase.neutralSample;
+  int _colorIndex = 0;
+  int _frameCounter = 0;
 
-  /// Warmup frames skipped at the start of each color phase
-  int _warmupCounter = 0;
-
-  final List<double> _baselineReadings = [];
-  final Map<String, List<double>> _flashReadings = {
-    'red': [],
-    'green': [],
-    'blue': [],
+  final Map<String, List<double>> _localBaselineReadings = {
+    for (final c in _kColors) c: <double>[],
+  };
+  final Map<String, List<double>> _colorReadings = {
+    for (final c in _kColors) c: <double>[],
   };
 
   /// Set by the caller once [CameraService.lockExposure] resolves — surfaced
@@ -39,102 +57,105 @@ class ScreenFlashService {
   ScreenFlashPhase get phase => _phase;
 
   /// Color that should be shown as a full-screen overlay right now.
-  /// `null` means no overlay (baseline or idle phase).
+  /// `null` means no overlay (neutral/baseline sampling, warmup between
+  /// colors, or idle/done).
   Color? get activeFlashColor {
-    switch (_phase) {
-      case ScreenFlashPhase.flashRed:
-        return const Color(0xFFFF0000);
-      case ScreenFlashPhase.flashGreen:
-        return const Color(0xFF00FF00);
-      case ScreenFlashPhase.flashBlue:
-        return const Color(0xFF0000FF);
-      default:
-        return null;
+    if (_subPhase == _SubPhase.colorWarmup || _subPhase == _SubPhase.colorSample) {
+      return _kOverlayColors[_kColors[_colorIndex]];
     }
+    return null;
   }
 
-  bool get isRunning =>
-      _phase != ScreenFlashPhase.idle && _phase != ScreenFlashPhase.done;
+  bool get isRunning => _phase == ScreenFlashPhase.running;
 
   void start() {
-    _phase = ScreenFlashPhase.baseline;
-    _warmupCounter = 0;
-    _baselineReadings.clear();
-    _flashReadings.forEach((_, list) => list.clear());
+    _phase = ScreenFlashPhase.running;
+    _colorIndex = 0;
+    // No warmup before the very first local baseline: the screen is already
+    // showing no color overlay coming into this (matches the old behaviour,
+    // where the initial baseline phase had no warmup either). Every
+    // subsequent color's local baseline DOES get a neutralWarmup first,
+    // since it follows straight after the previous color's overlay.
+    _subPhase = _SubPhase.neutralSample;
+    _frameCounter = 0;
+    for (final c in _kColors) {
+      _localBaselineReadings[c]!.clear();
+      _colorReadings[c]!.clear();
+    }
     exposureLockSucceeded = null;
   }
 
   void reset() {
     _phase = ScreenFlashPhase.idle;
-    _warmupCounter = 0;
-    _baselineReadings.clear();
-    _flashReadings.forEach((_, list) => list.clear());
+    _subPhase = _SubPhase.neutralSample;
+    _colorIndex = 0;
+    _frameCounter = 0;
+    for (final c in _kColors) {
+      _localBaselineReadings[c]!.clear();
+      _colorReadings[c]!.clear();
+    }
     exposureLockSucceeded = null;
   }
 
   /// Process one camera frame. Returns [ScreenFlashResult] when all phases
   /// are complete, otherwise `null`.
   ScreenFlashResult? processFrame(Face face, CameraImage image) {
-    if (_phase == ScreenFlashPhase.idle || _phase == ScreenFlashPhase.done) {
-      return null;
-    }
+    if (_phase != ScreenFlashPhase.running) return null;
 
     final lum = _sampleFaceLuminance(image, face.boundingBox);
+    final color = _kColors[_colorIndex];
 
-    switch (_phase) {
-      case ScreenFlashPhase.baseline:
-        _baselineReadings.add(lum);
-        if (_baselineReadings.length >= config.baselineFrames) {
-          _phase = ScreenFlashPhase.flashRed;
-        }
-
-      case ScreenFlashPhase.flashRed:
-        if (_warmupCounter < config.warmupFramesPerColor) {
-          _warmupCounter++;
-          break;
-        }
-        _flashReadings['red']!.add(lum);
-        if (_flashReadings['red']!.length >= config.framesPerColor) {
-          _phase = ScreenFlashPhase.flashGreen;
-          _warmupCounter = 0;
+    switch (_subPhase) {
+      case _SubPhase.neutralWarmup:
+        _frameCounter++;
+        if (_frameCounter >= config.warmupFramesPerColor) {
+          _subPhase = _SubPhase.neutralSample;
+          _frameCounter = 0;
         }
 
-      case ScreenFlashPhase.flashGreen:
-        if (_warmupCounter < config.warmupFramesPerColor) {
-          _warmupCounter++;
-          break;
-        }
-        _flashReadings['green']!.add(lum);
-        if (_flashReadings['green']!.length >= config.framesPerColor) {
-          _phase = ScreenFlashPhase.flashBlue;
-          _warmupCounter = 0;
+      case _SubPhase.neutralSample:
+        _localBaselineReadings[color]!.add(lum);
+        _frameCounter++;
+        if (_frameCounter >= config.baselineFrames) {
+          _subPhase = _SubPhase.colorWarmup;
+          _frameCounter = 0;
         }
 
-      case ScreenFlashPhase.flashBlue:
-        if (_warmupCounter < config.warmupFramesPerColor) {
-          _warmupCounter++;
-          break;
-        }
-        _flashReadings['blue']!.add(lum);
-        if (_flashReadings['blue']!.length >= config.framesPerColor) {
-          _phase = ScreenFlashPhase.done;
-          return _buildResult();
+      case _SubPhase.colorWarmup:
+        _frameCounter++;
+        if (_frameCounter >= config.warmupFramesPerColor) {
+          _subPhase = _SubPhase.colorSample;
+          _frameCounter = 0;
         }
 
-      default:
-        break;
+      case _SubPhase.colorSample:
+        _colorReadings[color]!.add(lum);
+        _frameCounter++;
+        if (_frameCounter >= config.framesPerColor) {
+          if (_colorIndex < _kColors.length - 1) {
+            _colorIndex++;
+            _subPhase = _SubPhase.neutralWarmup;
+            _frameCounter = 0;
+          } else {
+            _phase = ScreenFlashPhase.done;
+            return _buildResult();
+          }
+        }
     }
     return null;
   }
 
   ScreenFlashResult _buildResult() {
-    final baseline = _mean(_baselineReadings);
+    final localBaselines = <String, double>{};
     final deltas = <String, double>{};
-    _flashReadings.forEach((color, readings) {
-      deltas[color] = _mean(readings) - baseline;
-    });
+    for (final color in _kColors) {
+      final baseline = _mean(_localBaselineReadings[color]!);
+      localBaselines[color] = baseline;
+      deltas[color] = _mean(_colorReadings[color]!) - baseline;
+    }
 
-    // Pass if ≥ 2 colors show a positive delta above threshold
+    // Pass if ≥ 2 colors show a positive delta above threshold, each
+    // measured against its OWN local baseline (see [_SubPhase] doc).
     final passingColors =
         deltas.values.where((d) => d >= config.reflectionThreshold).length;
     final passed = passingColors >= 2;
@@ -147,11 +168,13 @@ class ScreenFlashService {
     return ScreenFlashResult(
       passed: passed,
       colorDeltas: deltas,
-      baselineLuminance: baseline,
+      localBaselines: localBaselines,
       confidence: confidence,
-      rawBaselineReadings: List.unmodifiable(_baselineReadings),
-      rawFlashReadings: {
-        for (final entry in _flashReadings.entries) entry.key: List.unmodifiable(entry.value),
+      rawLocalBaselineReadings: {
+        for (final c in _kColors) c: List.unmodifiable(_localBaselineReadings[c]!),
+      },
+      rawColorReadings: {
+        for (final c in _kColors) c: List.unmodifiable(_colorReadings[c]!),
       },
       exposureLockSucceeded: exposureLockSucceeded,
     );

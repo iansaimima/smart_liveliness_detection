@@ -15,7 +15,10 @@ class ScreenFlashConfig {
   /// Camera frames to capture per flash color (more = stabler reading).
   final int framesPerColor;
 
-  /// Camera frames sampled before any flash (establishes baseline luminance).
+  /// Camera frames sampled with no color overlay, immediately before EACH
+  /// color's own flash phase (establishes that color's local baseline
+  /// luminance — see ScreenFlashService._SubPhase doc for why it's local
+  /// per-color rather than one baseline shared by all colors).
   final int baselineFrames;
 
   /// Frames to skip at the start of each flash color phase while the camera
