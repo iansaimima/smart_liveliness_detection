@@ -221,22 +221,32 @@ class CameraService {
   }
 
   /// Lock exposure so AEC doesn't compensate during screen-flash test.
-  Future<void> lockExposure() async {
-    if (!isInitialized) return;
+  ///
+  /// Returns whether the platform actually honoured the lock. Callers should
+  /// surface this in diagnostics — if `setExposureMode(locked)` silently
+  /// fails/unsupported on a device, AEC keeps auto-adjusting through the
+  /// flash sequence and can fight the flash, producing unreliable (even
+  /// negative) luminance deltas that look like spoofing on a genuine face.
+  Future<bool> lockExposure() async {
+    if (!isInitialized) return false;
     try {
       await _controller!.setExposureMode(ExposureMode.locked);
+      return true;
     } catch (e) {
       debugPrint('lockExposure not supported: $e');
+      return false;
     }
   }
 
   /// Restore automatic exposure after screen-flash test.
-  Future<void> unlockExposure() async {
-    if (!isInitialized) return;
+  Future<bool> unlockExposure() async {
+    if (!isInitialized) return false;
     try {
       await _controller!.setExposureMode(ExposureMode.auto);
+      return true;
     } catch (e) {
       debugPrint('unlockExposure not supported: $e');
+      return false;
     }
   }
 

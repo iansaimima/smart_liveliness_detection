@@ -382,7 +382,7 @@ class HomeScreen extends StatelessWidget {
           cameras: cameras,
           config: config,
           theme: theme,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -559,7 +559,7 @@ class HomeScreen extends StatelessWidget {
             primaryColor: Colors.blue,
             successColor: Colors.green,
           ),
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -592,7 +592,7 @@ class HomeScreen extends StatelessWidget {
           futuristicBarHeight: 72,
           showAppBar: false,
           showStatusIndicators: true,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -642,7 +642,7 @@ class HomeScreen extends StatelessWidget {
           futuristicBarHeight: 72,
           showAppBar: false,
           showStatusIndicators: true,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -703,7 +703,7 @@ class HomeScreen extends StatelessWidget {
           allowStyleChange: true,
           showAppBar: false,
           showStatusIndicators: true,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -794,7 +794,7 @@ class HomeScreen extends StatelessWidget {
           allowStyleChange: true,
           showAppBar: false,
           showStatusIndicators: true,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -852,7 +852,7 @@ class HomeScreen extends StatelessWidget {
           ),
           theme: const LivenessTheme(),
           showAppBar: true,
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -964,7 +964,7 @@ class HomeScreen extends StatelessWidget {
             log('Recommendations: ${result.recommendations}');
             log('Metrics: ${result.metrics.map((k, v) => MapEntry(k, v.toStringAsFixed(1)))}');
           },
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {
@@ -1046,7 +1046,7 @@ class HomeScreen extends StatelessWidget {
             Colors.purple,
             brightness: Brightness.dark,
           ),
-          onChallengeCompleted: (challengeType) {
+          onChallengeCompleted: (challengeType, confidence) {
             log('Challenge completed: ${challengeType.name}');
           },
           onLivenessCompleted: (sessionId, isSuccessful, metadata) {

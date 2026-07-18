@@ -636,6 +636,31 @@ class FaceDetectionService {
     return Offset(x, y);
   }
 
+  /// Raw ML Kit / geometry signal behind [detectChallengeCompletion] for the
+  /// given challenge, read independently of whether the challenge passed —
+  /// for diagnostics/reporting only (e.g. surfacing "how close" a failed
+  /// attempt was). `null` if the relevant face metric isn't available yet.
+  double? challengeMetric(Face face, ChallengeType challengeType, {double? zoomFactor}) {
+    switch (challengeType) {
+      case ChallengeType.blink:
+        if (face.leftEyeOpenProbability == null || face.rightEyeOpenProbability == null) return null;
+        return (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2;
+      case ChallengeType.smile:
+        return face.smilingProbability;
+      case ChallengeType.turnLeft:
+      case ChallengeType.turnRight:
+        return face.headEulerAngleY;
+      case ChallengeType.nod:
+      case ChallengeType.tiltDown:
+      case ChallengeType.tiltUp:
+        return face.headEulerAngleX;
+      case ChallengeType.zoom:
+        return zoomFactor;
+      case ChallengeType.normal:
+        return null;
+    }
+  }
+
   /// Detect if a challenge has been completed
   bool detectChallengeCompletion(Face face, ChallengeType challengeType,
       {Rect? ovalRect, double? zoomFactor}) {

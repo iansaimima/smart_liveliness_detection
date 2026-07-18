@@ -102,6 +102,12 @@ class LivenessController extends ChangeNotifier {
   /// diagnostics/threshold-tuning instead of just the pass/fail boolean.
   ScreenFlashResult? _lastScreenFlashResult;
 
+  /// Most recent raw detector signal (see [FaceDetectionService.challengeMetric])
+  /// observed per challenge type — updated every processed frame while that
+  /// challenge is active, regardless of pass/fail, so a challenge that never
+  /// completes (session timeout) still reports "how close" the last reading was.
+  final Map<ChallengeType, double> _lastChallengeMetrics = {};
+
   /// Last computed face quality result
   FaceQualityResult? _lastQualityResult;
 
@@ -560,7 +566,14 @@ class LivenessController extends ChangeNotifier {
           if (_config.screenFlash?.enabled == true) {
             _screenFlashService = ScreenFlashService(config: _config.screenFlash!);
             _screenFlashService!.start();
-            _cameraService.lockExposure(); // prevent AEC fighting the flash
+            // prevent AEC fighting the flash. _processLivenessDetection is
+            // synchronous (called per camera frame) so this can't be awaited
+            // here — capture the result on the specific service instance
+            // once it resolves, read back in _buildResult()/_completeSession().
+            final flashService = _screenFlashService!;
+            _cameraService.lockExposure().then((succeeded) {
+              flashService.exposureLockSucceeded = succeeded;
+            });
             _session.state = LivenessState.screenFlashTest;
             _statusMessage = _config.messages.screenFlashInstruction;
           } else {
@@ -629,6 +642,15 @@ class LivenessController extends ChangeNotifier {
           zoomFactor: _zoomChallengeController.zoomFactor,
         );
 
+        final challengeMetric = _faceDetectionService.challengeMetric(
+          face,
+          currentChallenge.type,
+          zoomFactor: _zoomChallengeController.zoomFactor,
+        );
+        if (challengeMetric != null) {
+          _lastChallengeMetrics[currentChallenge.type] = challengeMetric;
+        }
+
         // If the challenge is zoom, add a check to ensure the animation has finished.
         if (currentChallenge.type == ChallengeType.zoom) {
           // The zoom animation is "complete" when the zoomFactor is 1.0.
@@ -653,7 +675,7 @@ class LivenessController extends ChangeNotifier {
           _session.currentChallengeIndex++;
 
           // Notify via callback
-          _onChallengeCompleted?.call(currentChallenge.type);
+          _onChallengeCompleted?.call(currentChallenge.type, _lastChallengeMetrics[currentChallenge.type]);
 
           _updateStatusMessage();
           _speak(_statusMessage);
@@ -753,7 +775,24 @@ class LivenessController extends ChangeNotifier {
           'baselineLuminance': _lastScreenFlashResult!.baselineLuminance,
           'confidence': _lastScreenFlashResult!.confidence,
           'reflectionThreshold': _config.screenFlash?.reflectionThreshold,
+          // Diagnostics added to debug erratic/negative deltas on genuine
+          // faces: whether AEC lock actually held, and the raw per-frame
+          // luminance samples behind the averaged colorDeltas/baseline above.
+          'exposureLockSucceeded': _lastScreenFlashResult!.exposureLockSucceeded,
+          'rawBaselineReadings': _lastScreenFlashResult!.rawBaselineReadings,
+          'rawFlashReadings': _lastScreenFlashResult!.rawFlashReadings,
         },
+      // Per-challenge outcome (completed or not) with the raw detector
+      // signal last observed for it — lets the host app tell "challenge
+      // genuinely not attempted/detected" apart from "session ended before
+      // it timed out", instead of only knowing the overall session result.
+      'challengeResults': _session.challenges
+          .map((c) => {
+                'type': c.type.toString(),
+                'isCompleted': c.isCompleted,
+                'lastMetric': _lastChallengeMetrics[c.type],
+              })
+          .toList(),
     };
 
     // Capture final image if enabled

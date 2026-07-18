@@ -30,6 +30,10 @@ class ScreenFlashService {
     'blue': [],
   };
 
+  /// Set by the caller once [CameraService.lockExposure] resolves — surfaced
+  /// in the result for diagnostics (see [ScreenFlashResult.exposureLockSucceeded]).
+  bool? exposureLockSucceeded;
+
   ScreenFlashService({required this.config});
 
   ScreenFlashPhase get phase => _phase;
@@ -57,6 +61,7 @@ class ScreenFlashService {
     _warmupCounter = 0;
     _baselineReadings.clear();
     _flashReadings.forEach((_, list) => list.clear());
+    exposureLockSucceeded = null;
   }
 
   void reset() {
@@ -64,6 +69,7 @@ class ScreenFlashService {
     _warmupCounter = 0;
     _baselineReadings.clear();
     _flashReadings.forEach((_, list) => list.clear());
+    exposureLockSucceeded = null;
   }
 
   /// Process one camera frame. Returns [ScreenFlashResult] when all phases
@@ -143,6 +149,11 @@ class ScreenFlashService {
       colorDeltas: deltas,
       baselineLuminance: baseline,
       confidence: confidence,
+      rawBaselineReadings: List.unmodifiable(_baselineReadings),
+      rawFlashReadings: {
+        for (final entry in _flashReadings.entries) entry.key: List.unmodifiable(entry.value),
+      },
+      exposureLockSucceeded: exposureLockSucceeded,
     );
   }
 

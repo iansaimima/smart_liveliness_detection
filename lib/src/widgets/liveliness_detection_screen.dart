@@ -12,8 +12,9 @@ import 'package:smart_liveliness_detection/src/widgets/status_indicator.dart';
 import 'package:smart_liveliness_detection/src/widgets/success_overlay.dart';
 import 'package:smart_liveliness_detection/src/widgets/challenge_hint_widget.dart';
 
-/// Callback type for when a challenge is completed
-typedef ChallengeCompletedCallback = void Function(ChallengeType challengeType);
+/// Callback type for when a challenge is completed. `confidence` is the raw
+/// detector signal behind the pass (see FaceDetectionService.challengeMetric).
+typedef ChallengeCompletedCallback = void Function(ChallengeType challengeType, double? confidence);
 
 /// Callback type for when liveness verification is completed
 typedef LivenessCompletedCallback = void Function(String sessionId, bool isSuccessful, Map<String, dynamic> data);

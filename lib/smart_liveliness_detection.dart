@@ -60,7 +60,13 @@ export 'src/widgets/liveness_style_picker.dart';
 
 // Callback types
 typedef LivenessCompletedCallback = void Function(String sessionId, bool isSuccessful, Map<String, dynamic>? metadata);
-typedef ChallengeCompletedCallback = void Function(ChallengeType challengeType);
+// `confidence` is the raw detector signal behind the pass (see
+// FaceDetectionService.challengeMetric). Required (not optional) — Dart's
+// function-subtyping rules mean an optional param here still forces every
+// implementing closure to declare it anyway (a 1-arg closure isn't
+// assignable to a 2-arg-capable type), so making it required is no more
+// breaking and is clearer about what callers get.
+typedef ChallengeCompletedCallback = void Function(ChallengeType challengeType, double? confidence);
 typedef FinalImageCapturedCallback = void Function(String sessionId, XFile imageFile, Map<String, dynamic> metadata);
 
 typedef FaceDetectedCallback = void Function(ChallengeType challengeType, bool firstChallengePassed, CameraImage image, List<Face> faces, CameraDescription camera);
