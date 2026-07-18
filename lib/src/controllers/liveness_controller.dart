@@ -763,6 +763,17 @@ class LivenessController extends ChangeNotifier {
 
         if (finalImage != null && _onFinalImageCaptured != null) {
           // Create metadata for the captured image
+          //
+          // BUGFIX: this used to omit `screenFlashDiagnostics` (colorDeltas,
+          // baselineLuminance, confidence, reflectionThreshold) entirely —
+          // that data was only ever attached to `metadata`, which is passed
+          // to onLivenessCompleted, not onFinalImageCaptured. Callers that
+          // rely on onFinalImageCaptured (the common case when
+          // captureFinalImage is true) never saw the raw numbers behind
+          // screenFlashSpoofDetected, making it impossible to tell a
+          // threshold-calibration issue from a genuine spoof from this
+          // callback alone. Spread `metadata` in so both callbacks carry the
+          // same diagnostics.
           final fullMetadata = {
             'timestamp': DateTime.now().millisecondsSinceEpoch,
             'verificationResult': _isVerificationSuccessful,
@@ -771,7 +782,7 @@ class LivenessController extends ChangeNotifier {
             'sessionDuration':
                 DateTime.now().difference(_session.startTime).inMilliseconds,
             'lightingValue': _cameraService.lightingValue,
-            'antiSpoofingDetection': antiSpoofingResults,
+            ...metadata,
           };
 
           // Call the callback with the image and metadata
