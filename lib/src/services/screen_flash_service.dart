@@ -114,7 +114,7 @@ class ScreenFlashService {
     switch (_subPhase) {
       case _SubPhase.neutralWarmup:
         _frameCounter++;
-        if (_frameCounter >= config.warmupFramesPerColor) {
+        if (_frameCounter >= config.neutralSettleFrames) {
           _subPhase = _SubPhase.neutralSample;
           _frameCounter = 0;
         }

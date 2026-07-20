@@ -26,6 +26,15 @@ class ScreenFlashConfig {
   /// frames that haven't stabilised yet.
   final int warmupFramesPerColor;
 
+  /// Frames to skip when the screen returns to neutral (no overlay) right
+  /// after a color phase, before sampling that neutral phase as the NEXT
+  /// color's local baseline. Deliberately longer than [warmupFramesPerColor]:
+  /// field testing showed a saturated full-screen flash can leave a brief
+  /// afterglow (AWB/sensor settling) that, if the next local baseline is
+  /// sampled too soon, inflates that baseline and makes the following
+  /// color's delta look artificially negative even on a genuine face.
+  final int neutralSettleFrames;
+
   /// Minimum luminance delta (0–255 scale) required per color to pass.
   /// Kept intentionally low because AEC partially offsets the flash; the test
   /// looks for any positive response, not the full flash magnitude.
@@ -45,6 +54,7 @@ class ScreenFlashConfig {
     this.framesPerColor = 5,
     this.baselineFrames = 3,
     this.warmupFramesPerColor = 2,
+    this.neutralSettleFrames = 5,
     this.reflectionThreshold = 4.0,
     this.failSessionOnSpoofing = false,
   });
