@@ -60,6 +60,12 @@ class ScreenFlashService {
   /// `null` means no overlay (neutral/baseline sampling, warmup between
   /// colors, or idle/done).
   Color? get activeFlashColor {
+    // _subPhase/_colorIndex aren't reset when the test completes (they stay
+    // parked on the last color sampled, e.g. blue) — _phase is the only
+    // signal that the test is actually still running. Without this check,
+    // the overlay from the last color stays on screen through the entire
+    // challenge stage instead of clearing once screenFlashTest finishes.
+    if (_phase != ScreenFlashPhase.running) return null;
     if (_subPhase == _SubPhase.colorWarmup || _subPhase == _SubPhase.colorSample) {
       return _kOverlayColors[_kColors[_colorIndex]];
     }
