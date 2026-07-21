@@ -41,6 +41,10 @@ class ScreenFlashService {
   int _colorIndex = 0;
   int _frameCounter = 0;
 
+  /// Drives the neutralWarmup/colorWarmup sub-phases, which wait on elapsed
+  /// wall-clock time rather than a frame count (see [ScreenFlashConfig.warmupDuration]).
+  final Stopwatch _warmupTimer = Stopwatch();
+
   final Map<String, List<double>> _localBaselineReadings = {
     for (final c in _kColors) c: <double>[],
   };
@@ -84,6 +88,9 @@ class ScreenFlashService {
     // since it follows straight after the previous color's overlay.
     _subPhase = _SubPhase.neutralSample;
     _frameCounter = 0;
+    _warmupTimer
+      ..stop()
+      ..reset();
     for (final c in _kColors) {
       _localBaselineReadings[c]!.clear();
       _colorReadings[c]!.clear();
@@ -96,6 +103,9 @@ class ScreenFlashService {
     _subPhase = _SubPhase.neutralSample;
     _colorIndex = 0;
     _frameCounter = 0;
+    _warmupTimer
+      ..stop()
+      ..reset();
     for (final c in _kColors) {
       _localBaselineReadings[c]!.clear();
       _colorReadings[c]!.clear();
@@ -113,8 +123,11 @@ class ScreenFlashService {
 
     switch (_subPhase) {
       case _SubPhase.neutralWarmup:
-        _frameCounter++;
-        if (_frameCounter >= config.neutralSettleFrames) {
+        if (!_warmupTimer.isRunning) _warmupTimer.start();
+        if (_warmupTimer.elapsed >= config.neutralSettleDuration) {
+          _warmupTimer
+            ..stop()
+            ..reset();
           _subPhase = _SubPhase.neutralSample;
           _frameCounter = 0;
         }
@@ -128,8 +141,11 @@ class ScreenFlashService {
         }
 
       case _SubPhase.colorWarmup:
-        _frameCounter++;
-        if (_frameCounter >= config.warmupFramesPerColor) {
+        if (!_warmupTimer.isRunning) _warmupTimer.start();
+        if (_warmupTimer.elapsed >= config.warmupDuration) {
+          _warmupTimer
+            ..stop()
+            ..reset();
           _subPhase = _SubPhase.colorSample;
           _frameCounter = 0;
         }

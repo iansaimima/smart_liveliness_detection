@@ -897,7 +897,7 @@ class HomeScreen extends StatelessWidget {
               enabled: true,
               framesPerColor: 5,
               baselineFrames: 3,
-              warmupFramesPerColor: 2,
+              warmupDuration: Duration(milliseconds: 150),
               reflectionThreshold: 4.0,
               failSessionOnSpoofing: false,
             ),

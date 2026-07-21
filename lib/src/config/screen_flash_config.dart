@@ -21,19 +21,27 @@ class ScreenFlashConfig {
   /// per-color rather than one baseline shared by all colors).
   final int baselineFrames;
 
-  /// Frames to skip at the start of each flash color phase while the camera
-  /// and UI settle before sampling begins. Prevents reading AEC-transitioning
-  /// frames that haven't stabilised yet.
-  final int warmupFramesPerColor;
+  /// Wall-clock time to wait at the start of each flash color phase while the
+  /// camera and UI settle before sampling begins. Prevents reading
+  /// AEC-transitioning frames that haven't stabilised yet.
+  ///
+  /// Time-based rather than frame-count-based: `processFrame` is driven by
+  /// however fast the device delivers face-detected camera frames, which
+  /// varies per device (and per lighting condition on the same device). A
+  /// frame count tuned against one device's frame rate can resolve to a much
+  /// shorter real-world wait on a slower device.
+  final Duration warmupDuration;
 
-  /// Frames to skip when the screen returns to neutral (no overlay) right
-  /// after a color phase, before sampling that neutral phase as the NEXT
-  /// color's local baseline. Deliberately longer than [warmupFramesPerColor]:
+  /// Wall-clock time to wait when the screen returns to neutral (no overlay)
+  /// right after a color phase, before sampling that neutral phase as the
+  /// NEXT color's local baseline. Deliberately longer than [warmupDuration]:
   /// field testing showed a saturated full-screen flash can leave a brief
   /// afterglow (AWB/sensor settling) that, if the next local baseline is
   /// sampled too soon, inflates that baseline and makes the following
-  /// color's delta look artificially negative even on a genuine face.
-  final int neutralSettleFrames;
+  /// color's delta look artificially negative even on a genuine face. Seen
+  /// recurring across multiple devices with the old frame-count version of
+  /// this wait, which motivated switching to a fixed duration.
+  final Duration neutralSettleDuration;
 
   /// Minimum luminance delta (0–255 scale) required per color to pass.
   /// Kept intentionally low because AEC partially offsets the flash; the test
@@ -53,8 +61,8 @@ class ScreenFlashConfig {
     ],
     this.framesPerColor = 5,
     this.baselineFrames = 3,
-    this.warmupFramesPerColor = 2,
-    this.neutralSettleFrames = 5,
+    this.warmupDuration = const Duration(milliseconds: 150),
+    this.neutralSettleDuration = const Duration(milliseconds: 450),
     this.reflectionThreshold = 4.0,
     this.failSessionOnSpoofing = false,
   });
