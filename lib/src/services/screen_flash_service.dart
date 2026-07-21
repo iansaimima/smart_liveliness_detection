@@ -177,10 +177,26 @@ class ScreenFlashService {
     }
 
     // Pass if ≥ 2 colors show a positive delta above threshold, each
-    // measured against its OWN local baseline (see [_SubPhase] doc).
+    // measured against its OWN local baseline (see [_SubPhase] doc). Blue is
+    // structurally the weakest of the three (see
+    // [ScreenFlashConfig.combinedThresholdMultiplier] doc), so a strict "2 of
+    // 3 individually clear the threshold" rule effectively demands red AND
+    // green both pass cleanly — field data showed genuine faces narrowly
+    // missing that indoors. Fall back to: 1 color clears the threshold on its
+    // own AND the combined response across all 3 colors is healthy, as long
+    // as no single color swung strongly negative (a real face doesn't get
+    // meaningfully darker under any flash color; a strong negative suggests
+    // measurement noise or a non-reflective surface, not a borderline pass).
     final passingColors =
         deltas.values.where((d) => d >= config.reflectionThreshold).length;
-    final passed = passingColors >= 2;
+    final totalDelta = deltas.values.fold(0.0, (acc, d) => acc + d);
+    final anyStronglyNegative =
+        deltas.values.any((d) => d <= -config.reflectionThreshold);
+    final passed = !anyStronglyNegative &&
+        (passingColors >= 2 ||
+            (passingColors >= 1 &&
+                totalDelta >=
+                    config.reflectionThreshold * config.combinedThresholdMultiplier));
 
     // Confidence: average positive delta normalised to an expected max of 50
     final avgPositiveDelta =

@@ -48,6 +48,19 @@ class ScreenFlashConfig {
   /// looks for any positive response, not the full flash magnitude.
   final double reflectionThreshold;
 
+  /// Multiplier applied to [reflectionThreshold] for the combined (summed
+  /// across all 3 colors) fallback pass condition — see
+  /// [ScreenFlashService._buildResult]. Blue's per-color delta is
+  /// structurally the weakest of the three (Y/luma formulas — and most
+  /// camera capture pipelines — weight blue far below red/green, and most
+  /// phone screens emit less luminous blue than red/green), so requiring 2
+  /// of 3 *individual* colors to clear [reflectionThreshold] effectively
+  /// means "red AND green must both pass cleanly", which real field data
+  /// showed genuine faces narrowly missing indoors. The combined check lets
+  /// one strong color plus a healthy aggregate response across all three
+  /// stand in for a second clean per-color pass.
+  final double combinedThresholdMultiplier;
+
   /// When `true`, a failed flash test marks the session as spoofing detected.
   /// When `false`, the result is reported via callback but the session continues.
   final bool failSessionOnSpoofing;
@@ -64,6 +77,7 @@ class ScreenFlashConfig {
     this.warmupDuration = const Duration(milliseconds: 150),
     this.neutralSettleDuration = const Duration(milliseconds: 450),
     this.reflectionThreshold = 4.0,
+    this.combinedThresholdMultiplier = 1.5,
     this.failSessionOnSpoofing = false,
   });
 }
